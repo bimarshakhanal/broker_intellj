@@ -10,9 +10,7 @@ import Script from 'next/script';
 interface Deal {
   id: number;
   property: string;
-  associated_property?: {
-    address: string;
-  };
+  property_address?: string;
   date: string;
   role?: string;
   url: string;
@@ -100,10 +98,12 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
       mapRef.current.innerHTML = '';
     }
 
-    const dealAddresses = (person.deals?.slice(0, 5) || []).map(deal => ({
-      address: deal.associated_property?.address || deal.property,
-      date: deal.date
-    })).filter(item => item.address && item.address.trim() !== '');
+    const dealAddresses = (person.deals?.slice(0, 10) || [])
+      .filter(deal => deal.property_address)
+      .map(deal => ({
+        address: deal.property_address!,
+        date: deal.date
+      }));
 
     if (dealAddresses.length === 0) return;
 
@@ -120,14 +120,25 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
       maxZoom: 19,
     }).addTo(map);
 
-    // Geocode and add markers for each address
+    // Geocode and add markers for each address with delay to avoid rate limiting
     const markerCoordinates: [number, number][] = [];
     let markersAdded = 0;
 
-    dealAddresses.forEach(({ address, date }) => {
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
-        .then(res => res.json())
-        .then(data => {
+    dealAddresses.forEach(({ address, date }, index) => {
+      // Add delay between requests (2 seconds per request to respect rate limits)
+      setTimeout(() => {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`, {
+          headers: {
+            'User-Agent': 'BrokerIntellijApp/1.0'
+          }
+        })
+          .then(res => {
+            if (!res.ok) {
+              throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+          })
+          .then(data => {
           if (data && data.length > 0) {
             const lat = parseFloat(data[0].lat);
             const lon = parseFloat(data[0].lon);
@@ -179,7 +190,11 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
             }
           }
         })
-        .catch(err => console.error('Geocoding error:', err));
+        .catch(err => {
+          console.error('Geocoding error:', err);
+          markersAdded++;
+        });
+      }, index * 2000); // 2 second delay between each request
     });
 
     mapInstanceRef.current = map;
@@ -241,17 +256,6 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
           {person.bio && <p className="text-gray-700 mt-4">{person.bio}</p>}
         </div>
 
-        {/* Map Section */}
-        {deals.length > 0 && (
-          <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Deals Locations</h2>
-            <div
-              ref={mapRef}
-              className="w-full h-96 rounded-lg border border-gray-200"
-            />
-          </div>
-        )}
-
         {/* Deals */}
         {deals.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
@@ -299,6 +303,17 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Map Section */}
+        {deals.length > 0 && (
+          <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Deals Locations</h2>
+            <div
+              ref={mapRef}
+              className="w-full h-96 rounded-lg border border-gray-200"
+            />
           </div>
         )}
 

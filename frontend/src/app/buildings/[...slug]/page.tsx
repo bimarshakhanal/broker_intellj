@@ -35,7 +35,7 @@ interface Participant {
 
 interface PropertyDetail {
   id: number;
-  address: string;
+  address?: string;
   url: string;
   name?: string;
   type?: string;
@@ -80,25 +80,33 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
     return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-gray-600">Loading...</div></div>;
   }
 
-  if (error || !property) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-red-600">{error || 'Property not found'}</div></div>;
+  if (error) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-red-600">{error}</div></div>;
   }
 
+  if (!property) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="text-xl text-red-600">Property not found</div></div>;
+  }
+
+  // After guards, property is definitely defined
+  const prop = property as PropertyDetail;
+
   // Extract name from address (part before first comma)
-  const propertyName = property.name || property.address.split(',')[0].trim();
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(property.address)}`;
+  const addressPart = prop?.address?.split(',')[0]?.trim();
+  const propertyName = prop?.name || addressPart || 'Property';
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(prop?.address || 'Unknown')}`;
 
   // Get all property fields dynamically, excluding known fields
   const excludedFields = ['id', '_id', 'address', 'url', 'name', 'deals', 'stories', 'participants'];
-  const propertyDetails = Object.entries(property)
+  const propertyDetails = Object.entries(prop as Record<string, any>)
     .filter(([key, value]) => !excludedFields.includes(key) && value !== null && value !== undefined && value !== '')
     .map(([key, value]) => ({
       key: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       value: String(value)
     }));
 
-  const people = property.participants?.filter(p => p.type === 'Person') || [];
-  const organizations = property.participants?.filter(p => p.type === 'Organization') || [];
+  const people = prop.participants?.filter(p => p.type === 'Person') || [];
+  const organizations = prop.participants?.filter(p => p.type === 'Organization') || [];
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -115,7 +123,7 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
               <h1 className="text-4xl font-bold text-gray-900 mb-3">{propertyName}</h1>
               <div className="flex items-start text-gray-600 text-lg mb-3">
                 <FaMapMarkerAlt className="mr-2 text-green-500 mt-1 flex-shrink-0" />
-                <span>{property.address}</span>
+                <span>{prop.address}</span>
               </div>
               <a 
                 href={googleMapsUrl}
@@ -146,11 +154,11 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
         )}
 
         {/* Deals Involving This Property */}
-        {property.deals && property.deals.length > 0 && (
+        {prop.deals && prop.deals.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Deals Involving This Property</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {property.deals.slice((dealsPage - 1) * itemsPerPage, dealsPage * itemsPerPage).map((deal, index) => (
+              {prop.deals.slice((dealsPage - 1) * itemsPerPage, dealsPage * itemsPerPage).map((deal, index) => (
                 <Link
                   key={`deal-${deal.id}-${(dealsPage - 1) * itemsPerPage + index}`}
                   href={deal.url}
@@ -184,7 +192,7 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
                 </Link>
               ))}
             </div>
-            {property.deals.length > itemsPerPage && (
+            {prop.deals.length > itemsPerPage && (
               <div className="mt-6 flex justify-center items-center space-x-4">
                 <button
                   onClick={() => setDealsPage(p => Math.max(1, p - 1))}
@@ -194,11 +202,11 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
                   <FaChevronLeft />
                 </button>
                 <span className="text-gray-700">
-                  Page {dealsPage} of {Math.ceil(property.deals.length / itemsPerPage)}
+                  Page {dealsPage} of {Math.ceil(prop.deals.length / itemsPerPage)}
                 </span>
                 <button
-                  onClick={() => setDealsPage(p => Math.min(Math.ceil(property.deals.length / itemsPerPage), p + 1))}
-                  disabled={dealsPage === Math.ceil(property.deals.length / itemsPerPage)}
+                  onClick={() => setDealsPage(p => Math.min(Math.ceil(prop.deals.length / itemsPerPage), p + 1))}
+                  disabled={dealsPage === Math.ceil(prop.deals.length / itemsPerPage)}
                   className="p-2 bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   <FaChevronRight />
@@ -315,11 +323,11 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
         )}
 
         {/* Related Stories */}
-        {property.stories && property.stories.length > 0 && (
+        {prop.stories && prop.stories.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Related Stories</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {property.stories.slice((storiesPage - 1) * itemsPerPage, storiesPage * itemsPerPage).map((story, index) => (
+              {prop.stories.slice((storiesPage - 1) * itemsPerPage, storiesPage * itemsPerPage).map((story, index) => (
                 <div key={`story-${story.id}-${(storiesPage - 1) * itemsPerPage + index}`} className="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition">
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">{story.title}</h3>
                   {story.source && <p className="text-sm text-gray-500">Source: {story.source}</p>}
@@ -336,7 +344,7 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
                 </div>
               ))}
             </div>
-            {property.stories.length > itemsPerPage && (
+            {prop.stories.length > itemsPerPage && (
               <div className="mt-6 flex justify-center items-center space-x-4">
                 <button
                   onClick={() => setStoriesPage(p => Math.max(1, p - 1))}
@@ -346,11 +354,11 @@ export default function PropertyDetailPage({ params }: { params: { slug: string[
                   <FaChevronLeft />
                 </button>
                 <span className="text-gray-700">
-                  Page {storiesPage} of {Math.ceil(property.stories.length / itemsPerPage)}
+                  Page {storiesPage} of {Math.ceil(prop.stories.length / itemsPerPage)}
                 </span>
                 <button
-                  onClick={() => setStoriesPage(p => Math.min(Math.ceil(property.stories.length / itemsPerPage), p + 1))}
-                  disabled={storiesPage === Math.ceil(property.stories.length / itemsPerPage)}
+                  onClick={() => setStoriesPage(p => Math.min(Math.ceil(prop.stories.length / itemsPerPage), p + 1))}
+                  disabled={storiesPage === Math.ceil(prop.stories.length / itemsPerPage)}
                   className="p-2 bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                 >
                   <FaChevronRight />

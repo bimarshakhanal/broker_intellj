@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaHome, FaUsers, FaHandshake, FaBuilding, FaNewspaper } from 'react-icons/fa';
+import { FaHome, FaUsers, FaHandshake, FaBuilding, FaNewspaper, FaStore } from 'react-icons/fa';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -10,6 +10,7 @@ export default function Navbar() {
   const links = [
     { href: '/', label: 'Home', icon: FaHome },
     { href: '/people', label: 'People', icon: FaUsers },
+    { href: '/organizations', label: 'Organizations', icon: FaStore },
     { href: '/deals', label: 'Deals', icon: FaHandshake },
     { href: '/properties', label: 'Properties', icon: FaBuilding },
     { href: '/stories', label: 'Stories', icon: FaNewspaper },
