@@ -5,29 +5,51 @@ from google.adk.agents import Agent
 from google.genai import types
 from neo4j import GraphDatabase
 
+from .internet_search import search_agent
+from google.adk.tools import agent_tool
+
+
 # Neo4j connection details
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASS = os.getenv("NEO4J_PASSWORD", "")
 MODEL = os.getenv("MODEL", "gemini-2.5-flash")
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
 
 
-async def get_person_details_from_neo4j(person_name: str) -> Dict:
+async def get_person_details_from_neo4j(person_details: Dict) -> Dict:
     """
     Fetch details of a broker (Person node) from Neo4j.
     Returns all properties stored in the Person node.
     """
-    query = """
-    MATCH (p:Person)
-    WHERE p.name = $name
-    RETURN p
-    """
+    print("***"*20)
+    print(person_details)
+    if person_details.get("email"):
+        query = """
+        MATCH (p:Person)
+        WHERE p.email = $email
+        RETURN p
+        """
+    elif person_details.get("organization") and person_details.get("name"):
+        query = """
+        MATCH (p:Person)-[:WORKS_FOR]->(org:Organization)
+        WHERE p.name = $name AND org.name = $organization
+        RETURN p
+        """
+    else:
+        query = """
+        MATCH (p:Person)
+        WHERE p.name = $name
+        RETURN p
+        """
 
     with driver.session() as session:
-        result = session.run(query, name=person_name)
+        result = session.run(query, name=person_details.get('name', ""),
+                             email=person_details.get('email', ""),
+                             organization=person_details.get('organization', ""))
         record = result.single()
+
         if not record:
             return {"broker": None}
 
@@ -92,6 +114,26 @@ def fetch_broker_locations(broker_url: str) -> Dict:
         locations = [record["location"] for record in result]
     return locations
 
+async def fetch_broker_details(person_details: Dict) -> Dict:
+    """
+    Fethches details of deals: personal details, organizations details, deals details with their locations
+    """
+    print("Fetching broker details from Neo4j with details:", person_details)
+    broker_match = await get_person_details_from_neo4j(person_details)
+
+    print("Broker match result from Neo4j:", broker_match)
+    broker_url = broker_match.get("broker", {}).get("url")
+    if not broker_url:
+        return {"message": "No broker found in database with provided details."}
+
+    boker_deals = fetch_broker_deals(broker_url)
+    broker_organizations = fetch_broker_organizations(broker_url)
+    broker_locations = fetch_broker_locations(broker_url)
+    return {
+        "deals": boker_deals,
+        "organizations": broker_organizations,
+        "locations": broker_locations
+    }
 
 broker_query_agent = Agent(
     name="broker_query_agent",
@@ -102,21 +144,18 @@ broker_query_agent = Agent(
 
     Your task:
 
-    1. Receive broker names from Root Agent or Broker Extraction Agent.
-    2. **ALWAYS** call `get_person_details_from_neo4j` first with the broker name to fetch basic properties of the Person node.
-    3. Extract the broker's URL (url field) from the result.
-    4. **THEN** call the following tools sequentially using the extracted broker URL:
-       - `fetch_broker_deals` to get all deals the broker participated in
-       - `fetch_broker_organizations` to get all organizations the broker is associated with
-       - `fetch_broker_locations` to get all property locations involved in deals
-    5. **You MUST call all four tools in sequence** for every broker queried. Do not skip any tool.
-    6. Do NOT add, modify or hallucinate data. Only use data returned by the tools.
-    7. If broker not found in first query: Inform the user that no information was found for the broker in natural language. Do NOT call the remaining tools.
-    8. Present the information in a clear and concise manner, using bullet points or headings if necessary for readability.
-    9. **Follow this format strictly when broker information is found:**
+    1. Receive broker details (name, email or organization name) from Root Agent or Broker Extraction Agent.
+    2. **ALWAYS** call `fetch_broker_details` first with the broker details[name, email, organization] to fetch basic properties of the Person node.
+        example input: {"name": "John Doe", "email": "john.doe@example.com", "organization": "Rent Busy"}
+        Both email and name may not be always available, but use all the available information to find the broker. If email is available, it should be used as primary identifier to find the broker. If email is not available, use name and organization together to find the broker. If only name is available, use name to find the broker.
+    3. If broker not found in first query: use only search_agent to find the required details of broker, do not use other tools.
+    4. Do NOT add, modify or hallucinate data. Only use data returned by the tools.
+    5. Present the information in a clear and concise manner, using bullet points or headings if necessary for readability.
+    6. Do not ask for more information from the user, if the information provided is not sufficient to find the broker, return a message stating that no broker was found with the provided details.
+    7. **Follow this format strictly when broker information is found:**
     ```
-    ## Broker Profile: **John Doe**  
-    **Title:** President and CEO at Rent Busy  
+    ## Broker Profile: **John Doe** 
+    **Title:** President and CEO at Rent Busy
     **Profile:** [View Details](/people/john-doe)  
 
     ---
@@ -150,17 +189,17 @@ broker_query_agent = Agent(
     John has been actively involved in high-value real estate transactions, primarily serving as a seller. His deal activity shows a strong presence in the New York/New Jersey market and frequent collaboration with prominent organizations like CBRE and Faropoint.
 
     ```
+    For the broker not found in the database, start with a brief statement that the broker was not found in our database and the information provided below is obtained from internet search.
     * Strictly follow the output samples above and include all relevant details from all tool results in this format. You can use markdown formatting for better readability.
     * Lenght of the response should depend on the amount of information found, but always aim to be concise and informative.
     * Do not response with anything other than
 """,
     tools=[
-        get_person_details_from_neo4j,
-        fetch_broker_deals,
-        fetch_broker_organizations,
-        fetch_broker_locations,
+        fetch_broker_details,
+        agent_tool.AgentTool(search_agent)
     ],
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.1
+        temperature=0.1,
+        thinking_config=types.ThinkingConfig(thinking_budget=0)
     )
 )

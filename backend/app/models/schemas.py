@@ -28,6 +28,10 @@ class Person(PersonBase):
 
 
 class PersonDetail(Person):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    image: Optional[str] = None
     deals: List['Deal'] = []
     organizations: List['Organization'] = []
     stories: List[Story] = []

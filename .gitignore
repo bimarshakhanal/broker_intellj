@@ -209,3 +209,5 @@ __marimo__/
 sandbox*.json
 node_modules/
 .next/
+
+*.db

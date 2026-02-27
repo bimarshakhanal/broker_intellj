@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaHome, FaUsers, FaHandshake, FaBuilding, FaNewspaper, FaStore } from 'react-icons/fa';
+import { FaHome, FaUsers, FaHandshake, FaBuilding, FaNewspaper, FaStore, FaSearch } from 'react-icons/fa';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -19,12 +19,13 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between items-center h-16">
+          {/* Navigation Links */}
           <div className="flex space-x-8">
             {links.map((link) => {
               const Icon = link.icon;
               const isActive = pathname === link.href || 
-                              (link.href !== '/' && pathname.startsWith(link.href));
+                              (link.href !== '/' && pathname?.startsWith(link.href));
               
               return (
                 <Link
@@ -41,6 +42,20 @@ export default function Navbar() {
                 </Link>
               );
             })}
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex-shrink-0 w-80">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaSearch className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search..."
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
           </div>
         </div>
       </div>

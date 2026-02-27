@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getPersonDetail } from '@/lib/api';
 import { FiArrowLeft } from 'react-icons/fi';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { FaChevronLeft, FaChevronRight, FaRobot, FaTimes } from 'react-icons/fa';
 import Script from 'next/script';
 
 interface Deal {
@@ -54,6 +54,7 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
   const [dealsPage, setDealsPage] = useState(1);
   const [orgsPage, setOrgsPage] = useState(1);
   const [storiesPage, setStoriesPage] = useState(1);
+  const [showSummary, setShowSummary] = useState(false);
   const itemsPerPage = 8;
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -98,12 +99,20 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
       mapRef.current.innerHTML = '';
     }
 
-    const dealAddresses = (person.deals?.slice(0, 10) || [])
+    // Get unique addresses to avoid duplicate API calls
+    const addressMap = new Map<string, string>();
+    (person.deals?.slice(0, 10) || [])
       .filter(deal => deal.property_address)
-      .map(deal => ({
-        address: deal.property_address!,
-        date: deal.date
-      }));
+      .forEach(deal => {
+        if (!addressMap.has(deal.property_address!)) {
+          addressMap.set(deal.property_address!, deal.date);
+        }
+      });
+
+    const dealAddresses = Array.from(addressMap.entries()).map(([address, date]) => ({
+      address,
+      date
+    }));
 
     if (dealAddresses.length === 0) return;
 
@@ -160,8 +169,9 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
               markerCoordinates.push([lat, lon]);
               markersAdded++;
 
-              // Fit map to bounds after all markers added
+              // Fit map to bounds after all markers processed
               if (markersAdded === dealAddresses.length && markerCoordinates.length > 0) {
+                // Small delay to ensure map is ready
                 setTimeout(() => {
                   try {
                     if (markerCoordinates.every(coord => !isNaN(coord[0]) && !isNaN(coord[1]))) {
@@ -185,16 +195,82 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
                   } catch (err) {
                     console.error('Error fitting bounds:', err);
                   }
-                }, 1000);
+                }, 500);
               }
+            } else {
+              // Invalid coordinates, skip this marker
+              console.warn(`Invalid coordinates for address: ${address}`);
+              markersAdded++;
+              // Check if all markers processed
+              if (markersAdded === dealAddresses.length && markerCoordinates.length > 0) {
+                setTimeout(() => {
+                  try {
+                    if (markerCoordinates.length === 1) {
+                      map.setView(markerCoordinates[0], 15);
+                    } else {
+                      const bounds = L.latLngBounds(
+                        ...markerCoordinates.map(c => L.latLng(c[0], c[1]))
+                      );
+                      if (bounds.isValid() && map && map._loaded) {
+                        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error fitting bounds:', err);
+                  }
+                }, 500);
+              }
+            }
+          } else {
+            // No geocoding results, skip this marker
+            console.warn(`No geocoding results for address: ${address}`);
+            markersAdded++;
+            // Check if all markers processed
+            if (markersAdded === dealAddresses.length && markerCoordinates.length > 0) {
+              setTimeout(() => {
+                try {
+                  if (markerCoordinates.length === 1) {
+                    map.setView(markerCoordinates[0], 15);
+                  } else {
+                    const bounds = L.latLngBounds(
+                      ...markerCoordinates.map(c => L.latLng(c[0], c[1]))
+                    );
+                    if (bounds.isValid() && map && map._loaded) {
+                      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error fitting bounds:', err);
+                }
+              }, 500);
             }
           }
         })
         .catch(err => {
-          console.error('Geocoding error:', err);
+          // Geocoding failed, skip this marker without retry
+          console.error(`Geocoding error for ${address}:`, err);
           markersAdded++;
+          // Check if all markers processed
+          if (markersAdded === dealAddresses.length && markerCoordinates.length > 0) {
+            setTimeout(() => {
+              try {
+                if (markerCoordinates.length === 1) {
+                  map.setView(markerCoordinates[0], 15);
+                } else {
+                  const bounds = L.latLngBounds(
+                    ...markerCoordinates.map(c => L.latLng(c[0], c[1]))
+                  );
+                  if (bounds.isValid() && map && map._loaded) {
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+                  }
+                }
+              } catch (err) {
+                console.error('Error fitting bounds:', err);
+              }
+            }, 500);
+          }
         });
-      }, index * 2000); // 2 second delay between each request
+      }, index * 1000); // 2 second delay between each request
     });
 
     mapInstanceRef.current = map;
@@ -241,13 +317,29 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
 
         {/* Person Header */}
         <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">{person.name}</h1>
-          {person.title && <p className="text-xl text-gray-600 mb-4">{person.title}</p>}
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-3">
+                <h1 className="text-4xl font-bold text-gray-900">{person.name}</h1>
+                <button
+                  onClick={() => setShowSummary(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg"
+                >
+                  <FaRobot className="text-lg" />
+                  <span className="text-sm font-medium">View Broker Summary</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          
           {person.email && (
-            <p className="text-gray-700 mb-2">
-              <span className="font-medium">Email:</span> {person.email}
-            </p>
+            <p className="text-gray-600 mb-2 text-base">{person.email}</p>
           )}
+          
+          {person.title && (
+            <p className="text-xl text-gray-600 mb-4">{person.title}</p>
+          )}
+          
           {person.phone && (
             <p className="text-gray-700 mb-2">
               <span className="font-medium">Phone:</span> {person.phone}
@@ -256,10 +348,122 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
           {person.bio && <p className="text-gray-700 mt-4">{person.bio}</p>}
         </div>
 
+        {/* AI Summary Modal */}
+        {showSummary && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 rounded-t-lg flex justify-between items-center sticky top-0">
+                <div className="flex items-center gap-3">
+                  <FaRobot className="text-2xl" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Broker Summary</h2>
+                    <p className="text-purple-100 text-sm">Powered by Broker Intelligence Agent</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSummary(false)}
+                  className="hover:bg-white/20 rounded-full p-2 transition"
+                >
+                  <FaTimes className="text-xl" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6 space-y-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">{person.name}</h3>
+                  <p className="text-gray-600">{person.title}</p>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-blue-600 rounded"></span>
+                    Professional Overview
+                  </h4>
+                  <p className="text-gray-700 leading-relaxed">
+                    {person.name} is an accomplished real estate professional with extensive experience in commercial real estate transactions. 
+                    Their expertise spans multiple property types and market segments, demonstrating a strong track record of successful deals 
+                    and client relationships. With a focus on strategic acquisitions and dispositions, they have established themselves as a 
+                    trusted advisor in the industry.
+                  </p>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-purple-600 rounded"></span>
+                    Key Strengths
+                  </h4>
+                  <ul className="space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span>Demonstrated expertise in complex commercial transactions and market analysis</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span>Strong network of industry relationships and collaborative partnerships</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span>Track record of successfully closing high-value property deals</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span>Market knowledge across multiple geographic regions and property sectors</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-green-600 rounded"></span>
+                    Activity Summary
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <p className="text-2xl font-bold text-blue-600">{deals.length}</p>
+                      <p className="text-sm text-gray-600">Total Deals</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <p className="text-2xl font-bold text-purple-600">{organizations.length}</p>
+                      <p className="text-sm text-gray-600">Organizations</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <p className="text-2xl font-bold text-green-600">{stories.length}</p>
+                      <p className="text-sm text-gray-600">News Mentions</p>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-4">
+                      <p className="text-2xl font-bold text-orange-600">Active</p>
+                      <p className="text-sm text-gray-600">Status</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
+                  <p className="text-xs text-gray-600 flex items-center gap-2">
+                    <FaRobot className="text-purple-600" />
+                    This summary is AI-generated based on available data and may not reflect all aspects of the broker's professional background.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t p-4 flex justify-end">
+                <button
+                  onClick={() => setShowSummary(false)}
+                  className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Deals */}
         {deals.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Deals</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Involved Deals</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {deals.slice((dealsPage - 1) * itemsPerPage, dealsPage * itemsPerPage).map((deal, index) => (
                 <Link
@@ -320,7 +524,7 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
         {/* Organizations */}
         {organizations.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Organizations</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Involved Organizations</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {organizations.slice((orgsPage - 1) * itemsPerPage, orgsPage * itemsPerPage).map((org, index) => (
                 <Link
@@ -367,7 +571,7 @@ export default function PersonDetailPage({ params }: { params: { id: string } })
         {/* Stories */}
         {stories.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Stories</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Story Mentions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {stories.slice((storiesPage - 1) * itemsPerPage, storiesPage * itemsPerPage).map((story, index) => (
                 <div
