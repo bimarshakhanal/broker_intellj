@@ -51,7 +51,7 @@ async def get_person_details_from_neo4j(person_details: Dict) -> Dict:
         record = result.single()
 
         if not record:
-            return {"broker": None}
+            return None
 
         person_node = record["p"]
         # convert Node properties to dict
@@ -70,6 +70,7 @@ def fetch_broker_deals(broker_url: str):
            prop.address AS property_address, prop.url AS property_url,
            org.name AS organization_name, org.url AS organization_url, org.type as organization_type
     ORDER BY d.date DESC
+    LIMIT 10
     """
     with driver.session() as session:
         result = session.run(query, broker_url=broker_url)
@@ -89,7 +90,7 @@ def fetch_broker_deals(broker_url: str):
 def fetch_broker_organizations(broker_url: str) -> Dict:
     query = """
     MATCH (p:Person {url: $broker_url})-[:WORKS_FOR]->(org:Organization)
-    RETURN org.name AS name, org.type AS type, org.url AS url
+    RETURN org.name AS name, org.type AS type, org.url AS url LIMIT 10
     """
     with driver.session() as session:
         result = session.run(query, broker_url=broker_url)
@@ -108,11 +109,13 @@ def fetch_broker_locations(broker_url: str) -> Dict:
     MATCH (p:Person {url: $broker_url})-[:PARTICIPATED_IN]->(d:Deal)-[:INVOLVES]->(prop:Property)
     WHERE prop.address IS NOT NULL
     RETURN DISTINCT prop.address AS location
+    LIMIT 10
     """
     with driver.session() as session:
         result = session.run(query, broker_url=broker_url)
         locations = [record["location"] for record in result]
     return locations
+
 
 async def fetch_broker_details(person_details: Dict) -> Dict:
     """
@@ -120,6 +123,10 @@ async def fetch_broker_details(person_details: Dict) -> Dict:
     """
     print("Fetching broker details from Neo4j with details:", person_details)
     broker_match = await get_person_details_from_neo4j(person_details)
+
+    if not broker_match:
+
+        return {"message": "No broker found in database with provided details."}
 
     print("Broker match result from Neo4j:", broker_match)
     broker_url = broker_match.get("broker", {}).get("url")
@@ -130,6 +137,7 @@ async def fetch_broker_details(person_details: Dict) -> Dict:
     broker_organizations = fetch_broker_organizations(broker_url)
     broker_locations = fetch_broker_locations(broker_url)
     return {
+        "person": broker_match.get("broker", {}),
         "deals": boker_deals,
         "organizations": broker_organizations,
         "locations": broker_locations
@@ -148,7 +156,7 @@ broker_query_agent = Agent(
     2. **ALWAYS** call `fetch_broker_details` first with the broker details[name, email, organization] to fetch basic properties of the Person node.
         example input: {"name": "John Doe", "email": "john.doe@example.com", "organization": "Rent Busy"}
         Both email and name may not be always available, but use all the available information to find the broker. If email is available, it should be used as primary identifier to find the broker. If email is not available, use name and organization together to find the broker. If only name is available, use name to find the broker.
-    3. If broker not found in first query: use only search_agent to find the required details of broker, do not use other tools.
+    3. If broker details are not found in daatbase, use only search_agent to find the required details of broker from internet, do not use other tools.
     4. Do NOT add, modify or hallucinate data. Only use data returned by the tools.
     5. Present the information in a clear and concise manner, using bullet points or headings if necessary for readability.
     6. Do not ask for more information from the user, if the information provided is not sufficient to find the broker, return a message stating that no broker was found with the provided details.
@@ -156,7 +164,7 @@ broker_query_agent = Agent(
     ```
     ## Broker Profile: **John Doe** 
     **Title:** President and CEO at Rent Busy
-    **Profile:** [View Details](/people/john-doe)  
+    **Profile:** [View Details](/people/john-doe)
 
     ---
 
