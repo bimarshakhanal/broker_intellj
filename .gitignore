@@ -211,3 +211,4 @@ node_modules/
 .next/
 
 *.db
+agent/intellj_agent/.adk/session.db

@@ -2,9 +2,10 @@
 
 ## Overview
 
-This is a full-stack application for managing and displaying real estate data. It consists of:
+This is a full-stack application for managing and displaying real estate data with AI-powered broker intelligence. It consists of:
 - **Frontend**: Next.js + React with TypeScript and Tailwind CSS
 - **Backend**: FastAPI with Neo4j database
+- **Agent**: Google ADK AI agent for broker extraction and enrichment
 - **Database**: Neo4j graph database
 
 ## Quick Start (Recommended)
@@ -14,15 +15,18 @@ This is a full-stack application for managing and displaying real estate data. I
 ```bash
 # Make sure Docker and Docker Compose are installed
 
-# 1. Start all services
-docker-compose up --build
+# 1. Start all services (frontend, backend, and agent)
+docker compose up --build
 
 # 2. Access the application
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-# Neo4j: http://localhost:7474
+# Backend API Docs: http://localhost:8000/docs
+# Agent API: http://localhost:8002
+# Neo4j: http://localhost:7474 (if running separately)
 ```
+
+Note: Neo4j is not included in docker-compose and should be running separately. Update the `NEO4J_URI` environment variable in docker-compose.yml if needed.
 
 ### Manual Setup
 
@@ -69,7 +73,41 @@ npm run dev
 
 Frontend will be available at: `http://localhost:3000`
 
-#### Step 3: Database Setup
+#### Step 3: Agent Setup
+
+```bash
+cd agent
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install uv package manager
+pip install uv
+
+# Install dependencies
+uv sync
+
+# Copy environment file
+cp .env.example .env
+
+# Add your Google service account credentials
+# Place your service account JSON file in the agent folder
+# Update .env with any required configuration
+
+# Start the agent
+adk api_server --port 8002
+```
+
+Agent API will be available at: `http://localhost:8002`
+
+**What the Agent Does:**
+- Extracts real estate broker information from unstructured text (emails, documents, etc.)
+- Searches the Neo4j database for matching broker profiles
+- Falls back to Google Search if broker not found in database
+- Generates comprehensive summaries including name, email, organization, and activity
+
+#### Step 4: Database Setup
 
 You need a running Neo4j instance. Options:
 
@@ -106,6 +144,11 @@ docker run -d \
 - **Base URL**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs (Swagger UI)
 - **API ReDoc**: http://localhost:8000/redoc
+
+### Agent API
+- **Base URL**: http://localhost:8002
+- **Purpose**: AI-powered broker extraction and enrichment
+- **Main Endpoint**: POST /api/agent/extract-brokers
 
 ### Neo4j Database
 - **URL**: http://localhost:7474
@@ -195,9 +238,15 @@ broker_intellj/
 │   ├── pyproject.toml
 │   └── README.md
 │
-├── agent/                  # Your existing agent code
-├── docker-compose.yml      # Docker Compose configuration
-├── setup.sh               # Setup script
+├── agent/                   # Google ADK AI Agent
+│   ├── intellj_agent/      # Agent implementation
+│   │   ├── agent.py        # Main agent logic
+│   │   └── subagents/      # Broker extraction, query, search
+│   ├── main.py             # Agent entry point
+│   ├── pyproject.toml      # Python dependencies
+│   └── Dockerfile          # Agent container
+├── docker-compose.yml       # Container orchestration
+├── setup.sh                 # Setup script
 └── README.md
 ```
 
@@ -222,6 +271,17 @@ source venv/bin/activate
 
 uvicorn app.main:app --reload  # Start development server
 pytest                         # Run tests (if implemented)
+```
+
+### Agent
+```bash
+cd agent
+
+# Activate virtual environment first
+source .venv/bin/activate
+
+adk api_server --port 8002     # Start agent API server
+python main.py                 # Run agent directly (alternative)
 ```
 
 ## Troubleshooting
@@ -255,6 +315,14 @@ NEO4J_URI=bolt://localhost:7687
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=password
 CORS_ORIGINS=["http://localhost:3000"]
+```
+
+### Agent (.env)
+```
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=password
+GOOGLE_APPLICATION_CREDENTIALS=./sandbox-230010-a8a2a7b265b5.json
 ```
 
 ## Development Tips

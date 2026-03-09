@@ -1,6 +1,6 @@
 # Real Estate Dashboard
 
-A comprehensive dashboard application for displaying and managing real estate data including people, deals, organizations, and properties. Built with Next.js frontend and FastAPI backend with Neo4j database integration.
+A comprehensive dashboard application for displaying and managing real estate data including people, deals, organizations, and properties. Built with Next.js frontend, FastAPI backend with Neo4j database integration, and an intelligent AI agent for broker information extraction and enrichment.
 
 ## Project Structure
 
@@ -28,7 +28,14 @@ broker_intellj/
 │   ├── requirements.txt
 │   ├── pyproject.toml
 │   └── README.md
-└── agent/            # Existing agent code
+├── agent/             # Google ADK AI Agent
+│   ├── intellj_agent/ # Agent implementation
+│   │   ├── agent.py   # Main agent logic
+│   │   └── subagents/ # Specialized subagents
+│   ├── main.py        # Agent entry point
+│   ├── pyproject.toml
+│   └── README.md
+└── docker-compose.yml # Container orchestration
 
 ```
 
@@ -82,15 +89,43 @@ broker_intellj/
 - **Service layer** for business logic separation
 - **Pydantic** for data validation
 
+### AI Agent (Google ADK)
+
+- **Intelligent Broker Extraction** - Automatically identifies real estate brokers from unstructured text (emails, documents)
+- **Database Integration** - Searches Neo4j database for existing broker information
+- **Internet Search Fallback** - Uses Google Search to find broker details when not in database
+- **Smart Summarization** - Generates comprehensive summaries of broker profiles including:
+  - Name, email, and organization details
+  - Professional background and experience
+  - Recent deals and activity
+- **Multi-source Intelligence** - Combines database records with web search results for complete profiles
+
 ## Quick Start
 
 ### Prerequisites
 
 - **Node.js** 18+ (for frontend)
-- **Python** 3.10+ (for backend)
+- **Python** 3.11+ (for backend and agent)
 - **Neo4j** database instance running
+- **Docker & Docker Compose** (recommended for easy deployment)
+- **Google API credentials** (for agent internet search capability)
 
-### Backend Setup
+### Using Docker Compose (Recommended)
+
+```bash
+# Start all services (backend, frontend, and agent)
+docker compose up --build
+
+# Access the services:
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:8000
+# - Backend API Docs: http://localhost:8000/docs
+# - Agent API: http://localhost:8002
+```
+
+### Manual Setup
+
+#### Backend Setup
 
 ```bash
 cd backend
@@ -135,6 +170,29 @@ npm run dev
 
 The application will be available at `http://localhost:3000`
 
+### Agent Setup
+
+```bash
+cd agent
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies using uv
+pip install uv
+uv sync
+
+# Configure Google credentials (for internet search)
+# Place your Google service account JSON in agent/
+cp /path/to/your/service-account.json ./
+
+# Start the agent API server
+adk api_server --port 8002
+```
+
+The agent API will be available at `http://localhost:8002`
+
 ## API Endpoints
 
 ### People
@@ -153,6 +211,12 @@ The application will be available at `http://localhost:3000`
 ### Health Check
 - `GET /` - API status
 - `GET /health` - Health check
+
+### Agent (AI Intelligence)
+- `POST /api/agent/extract-brokers` - Extract broker information from text
+  - Accepts unstructured text (emails, documents)
+  - Returns identified brokers with database matches or web search results
+  - Generates comprehensive summaries
 
 ## Database Schema (Neo4j)
 
@@ -237,7 +301,14 @@ CORS_ORIGINS=["http://localhost:3000"]
 - **Uvicorn** - ASGI server
 - **Neo4j** - Graph database
 - **Pydantic** - Data validation
-- **Python 3.10+** - Latest Python
+- **Python 3.11+** - Latest Python
+
+### Agent
+- **Google ADK** - AI Development Kit for building intelligent agents
+- **Python 3.11+** - Latest Python
+- **UV** - Fast Python package manager
+- **Neo4j** - Database integration
+- **Google Search API** - Web search capability
 
 ## Features Implemented
 
@@ -245,24 +316,32 @@ CORS_ORIGINS=["http://localhost:3000"]
 - ✅ Pagination for large datasets
 - ✅ Detailed pages for all entity types
 - ✅ Related entity navigation
-- ✅ Neo4j integration
+- ✅ Neo4j graph database integration
 - ✅ Type-safe frontend with TypeScript
 - ✅ RESTful API with proper error handling
 - ✅ CORS configuration
 - ✅ Auto-generated API documentation
 - ✅ Environment variable management
+- ✅ AI-powered broker extraction from text
+- ✅ Intelligent database search and fallback to web search
+- ✅ Automated broker profile summarization
+- ✅ Docker containerization with Docker Compose
+- ✅ Search functionality in navbar
+- ✅ Chatbot UI component
+- ✅ AI broker summary modal
 
 ## Future Enhancements
 
-- Add search and filtering capabilities
-- Implement authentication and authorization
+- Connect chatbot to AI agent backend
+- Implement search functionality with filtering
+- Add authentication and authorization
 - Add data editing/creation functionality
 - Implement advanced Neo4j queries
 - Add graph visualization
 - Performance optimization with caching
-- Unit and integration tests
+- Comprehensive unit and integration tests
 - CI/CD pipeline
-- Docker containerization
+- Real-time broker monitoring and alerts
 
 ## Troubleshooting
 
