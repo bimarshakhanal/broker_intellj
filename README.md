@@ -213,10 +213,7 @@ The agent API will be available at `http://localhost:8002`
 - `GET /health` - Health check
 
 ### Agent (AI Intelligence)
-- `POST /api/agent/extract-brokers` - Extract broker information from text
-  - Accepts unstructured text (emails, documents)
-  - Returns identified brokers with database matches or web search results
-  - Generates comprehensive summaries
+- Use adk inbuilt runneres, which serves the agent as a FastAPI application. 
 
 ## Database Schema (Neo4j)
 
@@ -308,7 +305,7 @@ CORS_ORIGINS=["http://localhost:3000"]
 - **Python 3.11+** - Latest Python
 - **UV** - Fast Python package manager
 - **Neo4j** - Database integration
-- **Google Search API** - Web search capability
+- **ADK Google Search Tool** - Web search capability
 
 ## Features Implemented
 
@@ -367,18 +364,4 @@ npm run dev -- -p 3001
 - Ensure frontend URL is in `CORS_ORIGINS` in backend `.env`
 - Check headers in browser console
 
-## Contributing
 
-When adding new features:
-1. Create feature branches
-2. Follow TypeScript/Python conventions
-3. Update documentation
-4. Test thoroughly before merging
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions, please create an issue in the repository.
